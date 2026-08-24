@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+backend/chroma_store/
+backend/parcelpilot.db
+backend/tfidf_vectorizer.pkl
+backend/escalations.json
+backend/audit_log.jsonl
+venv/
+.env
+*.egg-info/
