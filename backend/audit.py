@@ -54,7 +54,8 @@ def log_turn(
         "confidence_levels_seen": confidence_levels,
         "escalation_drafted": escalation_drafted,
         "escalation_confirmed": escalation_confirmed,
-        "final_answer_preview": final_answer_preview[:300],
+        "final_answer_preview": final_answer_preview,
+        # "final_answer_preview": final_answer_preview[:300],
     }
     with open(AUDIT_LOG_PATH, "a") as f:
         f.write(json.dumps(record) + "\n")
