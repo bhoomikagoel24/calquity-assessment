@@ -7,7 +7,7 @@
 #   2. Proactive Issues — ranked ops triage view (Problem 1).
 
 # Run with: streamlit run frontend/app.py
-# Requires ANTHROPIC_API_KEY in the environment.
+# Requires GOOGLE_API_KEY and GROQ_API_KEY in the environment.
 # """
 
 # import sys
@@ -192,7 +192,7 @@ Three tabs:
   3. Audit Log — compliance/traceability view.
 
 Run with: streamlit run frontend/app.py
-Requires ANTHROPIC_API_KEY in the environment.
+Requires GOOGLE_API_KEY and GROQ_API_KEY in the environment.
 """
 
 import sys
