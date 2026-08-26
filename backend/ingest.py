@@ -212,59 +212,120 @@ def load_vector_store():
     return client.get_collection("parcelpilot_docs", embedding_function=ef)
 
 
-def assess_confidence(results: list[dict]) -> dict:
-    """Gives a cheap, explainable confidence signal for a set of retrieved
-    chunks, so the agent (and the UI) can flag uncertainty instead of
-    answering with false confidence. This is a heuristic over metadata,
-    not a model judgment — it's meant to catch the two failure patterns
-    this system needs to worry about most: nothing relevant was found, or
-    two similarly-relevant chunks disagree in authority-implied conclusion.
+def assess_confidence(results: list[dict], account_id: str | None = None) -> dict:
     """
+    Give an explainable confidence signal for retrieved evidence.
+
+    Account-specific agreements only participate in authority/conflict
+    checks when they actually apply to the requested account.
+
+    Global sources (account_id == "ALL") apply to every account.
+    """
+
     if not results:
-        return {"confidence": "low", "reason": "No matching source found."}
-
-    top = results[0]
-    if top["relevance_score"] < 0.2:
-        return {"confidence": "low", "reason": "Best match has very low relevance — likely no documented answer."}
-
-    # If a higher-authority source (lower authority_level number) appears
-    # anywhere in the results but isn't the top match, that's a hierarchy
-    # check the model must not skip — e.g. a customer agreement clause
-    # ranking #2 by text similarity still outranks a policy doc ranking #1.
-    higher_authority_elsewhere = [
-        r for r in results[1:] if r["authority_level"] < top["authority_level"] and r["relevance_score"] > 0.08
-    ]
-    if higher_authority_elsewhere:
-        other = higher_authority_elsewhere[0]
         return {
-            "confidence": "medium",
+            "confidence": "low",
+            "reason": "No matching source found.",
+        }
+
+    # Only use sources that are actually applicable to the account.
+    applicable = [
+        r for r in results
+        if (
+            not account_id
+            or r.get("applies_to_account") in (None, "", "ALL", account_id)
+        )
+    ]
+
+    if not applicable:
+        return {
+            "confidence": "low",
+            "reason": "Retrieved sources are not applicable to this account.",
+        }
+
+    # Results are already ordered by retrieval relevance.
+    top = applicable[0]
+
+    if top.get("relevance_score", 0) < 0.2:
+        return {
+            "confidence": "low",
             "reason": (
-                f"Top text match is {top['source']} (authority level {top['authority_level']}), "
-                f"but a higher-authority source is also relevant: {other['source']} "
-                f"(authority level {other['authority_level']}). Check the higher-authority "
-                f"source first — it overrides if applicable to this account."
+                "Best applicable match has very low relevance — "
+                "likely no documented answer."
             ),
         }
 
-    if len(results) > 1:
-        second = results[1]
-        close_relevance = abs(top["relevance_score"] - second["relevance_score"]) < 0.1
-        different_authority = top["authority_level"] != second["authority_level"]
+    # Deprecated sources must never increase confidence.
+    if top.get("status") == "deprecated":
+        return {
+            "confidence": "low",
+            "reason": (
+                "Best applicable match is a deprecated source — "
+                "do not use it to answer."
+            ),
+        }
+
+    # A higher-authority applicable source should trigger a hierarchy check.
+    higher_authority_elsewhere = [
+        r
+        for r in applicable[1:]
+        if (
+            r.get("authority_level") is not None
+            and top.get("authority_level") is not None
+            and r["authority_level"] < top["authority_level"]
+            and r.get("relevance_score", 0) > 0.08
+        )
+    ]
+
+    if higher_authority_elsewhere:
+        other = higher_authority_elsewhere[0]
+
+        return {
+            "confidence": "medium",
+            "reason": (
+                f"Top text match is {top['source']} "
+                f"(authority level {top['authority_level']}), "
+                f"but a higher-authority applicable source is also relevant: "
+                f"{other['source']} "
+                f"(authority level {other['authority_level']}). "
+                "Check the higher-authority source first — it overrides "
+                "if applicable to this account."
+            ),
+        }
+
+    if len(applicable) > 1:
+        second = applicable[1]
+
+        close_relevance = (
+            abs(
+                top.get("relevance_score", 0)
+                - second.get("relevance_score", 0)
+            ) < 0.1
+        )
+
+        different_authority = (
+            top.get("authority_level") != second.get("authority_level")
+        )
+
         if close_relevance and different_authority:
             return {
                 "confidence": "medium",
                 "reason": (
-                    f"Top matches come from sources with different authority levels "
+                    "Top applicable matches come from sources with "
+                    "different authority levels "
                     f"({top['source']} [level {top['authority_level']}] vs "
                     f"{second['source']} [level {second['authority_level']}]) — "
-                    f"apply the authority hierarchy explicitly, don't just use the top match."
+                    "apply the authority hierarchy explicitly."
                 ),
             }
 
-    if top["status"] == "deprecated":
-        return {"confidence": "low", "reason": "Best match is a deprecated source — do not use it to answer."}
-
-    return {"confidence": "high", "reason": f"Clear top match from {top['source']} (authority level {top['authority_level']})."}
+    return {
+        "confidence": "high",
+        "reason": (
+            f"Clear applicable match from {top['source']} "
+            f"(authority level {top['authority_level']})."
+        ),
+    }
 
 
 if __name__ == "__main__":
