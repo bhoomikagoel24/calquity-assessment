@@ -520,14 +520,37 @@ def render_authority_ladder():
     st.sidebar.caption("Higher rung overrides lower when both apply to an account.")
 
 
-def compute_grounding(answer_text: str, trace: list) -> dict:
-    """Use the improved grounding module when available; otherwise fall back
-    to a permissive no-op so the UI never blocks on a missing dependency."""
-    if _HAS_GROUNDING_MODULE:
-        return assess_grounding(answer_text, trace)
-    return {"all_grounded": True, "unverified": [], "document_grounded": [],
-            "structured_data_grounded": [], "derived_from_grounded_evidence": [],
-            "figures_checked": []}
+def compute_grounding(answer_text, trace: list) -> dict:
+    """Compute grounding safely even when LangChain returns structured content."""
+    if not _HAS_GROUNDING_MODULE:
+        return {
+            "all_grounded": True,
+            "unverified": [],
+            "document_grounded": [],
+            "structured_data_grounded": [],
+            "derived_from_grounded_evidence": [],
+            "figures_checked": [],
+        }
+
+    # Gemini/LangChain can sometimes return message.content as a list
+    # instead of a plain string. Grounding expects text.
+    if isinstance(answer_text, list):
+        parts = []
+
+        for item in answer_text:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+
+        answer_text = "\n".join(parts)
+
+    elif not isinstance(answer_text, str):
+        answer_text = str(answer_text)
+
+    return assess_grounding(answer_text, trace)
 
 
 def render_trust_banner(grounding: dict):
@@ -571,7 +594,24 @@ def extract_sources_and_confidence(trace: list):
 def render_answer(turn: dict):
     """Render one assistant turn with a clear visual hierarchy:
     decision/answer -> trust banner -> sources & confidence -> raw trace."""
-    cleaned = clean_llm_markdown(turn["content"])
+
+    content = turn.get("content", "")
+
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+        content = "\n".join(parts)
+
+    elif not isinstance(content, str):
+        content = str(content)
+
+    cleaned = clean_llm_markdown(content)
     st.markdown(cleaned)
 
     grounding = turn.get("grounding")
@@ -683,7 +723,8 @@ with tab_chat:
             committed = tools_module.commit_escalation(pe["args"], confirmed_by=user_id)
             st.session_state.history.append({
                 "role": "assistant",
-                "content": f"Escalation **{committed['escalation_id']}** created and logged.\n\n```json\n{json.dumps(committed, indent=2)}\n```",
+                "content": f"Escalation **{committed.get('escalation_id', 'UNKNOWN')}** created and logged.\n\n```json\n{json.dumps(committed, indent=2)}\n```",
+                # "content": f"Escalation **{committed['escalation_id']}** created and logged.\n\n```json\n{json.dumps(committed, indent=2)}\n```",
             })
             st.session_state.pending_escalation = None
             st.rerun()

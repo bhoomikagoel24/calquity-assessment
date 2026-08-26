@@ -71,17 +71,45 @@ def _norm(value: float) -> str:
     return str(int(value)) if float(value).is_integer() else f"{float(value):g}"
 
 
-def _extract_figures(text: str) -> list[str]:
+def _extract_figures(text: str | list | tuple | dict | None) -> list[str]:
     """All distinct currency-prefixed figures appearing in the answer, normalized."""
     if not text:
         return []
+
+    # Gemini/LangChain can sometimes return structured content
+    # instead of a plain string.
+    if isinstance(text, (list, tuple)):
+        parts = []
+        for item in text:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                content = item.get("text") or item.get("content")
+                if content:
+                    parts.append(str(content))
+            else:
+                parts.append(str(item))
+        text = " ".join(parts)
+
+    elif isinstance(text, dict):
+        text = str(
+            text.get("text")
+            or text.get("content")
+            or text
+        )
+
+    else:
+        text = str(text)
+
     seen: dict[str, None] = {}
+
     for m in _MONEY_RE.finditer(text):
         raw = m.group(1).replace(",", "")
         try:
             seen[_norm(float(raw))] = None
         except ValueError:
             continue
+
     return list(seen.keys())
 
 
@@ -181,20 +209,44 @@ def _derivable(figure: str, grounded_pool: set[str], answer_text: str) -> bool:
     return False
 
 
-def assess_grounding(answer_text: str, trace: list[dict] | None) -> dict:
+def assess_grounding(
+    answer_text: str | list | tuple | dict | None,
+    trace: list[dict] | None,
+) -> dict:
     """
     Classify every monetary figure in `answer_text` using both the cited
     document text and structured tool evidence found in `trace`.
-
-    Returns a dict with:
-      all_grounded                       bool   (back-compat)
-      unverified                         list[str] (back-compat, raw figures)
-      document_grounded                  list[str]
-      structured_data_grounded           list[str]
-      derived_from_grounded_evidence     list[str]
-      figures_checked                    list[str]  (all figures found, for debugging)
     """
+
     trace = trace or []
+
+    # Normalize model content before passing it to regex-based functions.
+    if isinstance(answer_text, (list, tuple)):
+        parts = []
+        for item in answer_text:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                content = item.get("text") or item.get("content")
+                if content:
+                    parts.append(str(content))
+            else:
+                parts.append(str(item))
+        answer_text = " ".join(parts)
+
+    elif isinstance(answer_text, dict):
+        answer_text = str(
+            answer_text.get("text")
+            or answer_text.get("content")
+            or answer_text
+        )
+
+    elif answer_text is None:
+        answer_text = ""
+
+    else:
+        answer_text = str(answer_text)
+
     figures = _extract_figures(answer_text)
 
     payloads = _parsed_tool_payloads(trace)
