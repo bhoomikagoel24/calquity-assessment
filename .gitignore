@@ -9,3 +9,4 @@ backend/audit_log.jsonl
 venv/
 .env
 *.egg-info/
+HELPER/
