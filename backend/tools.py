@@ -48,16 +48,32 @@ def make_tools(ctx: "db.UserContext"):
         expanded = expand_query(query)
         res = col.query(query_texts=[expanded], n_results=5)
         out = []
+        # for doc, meta, dist in zip(res["documents"][0], res["metadatas"][0], res["distances"][0]):
+        #     out.append({
+        #         "source": meta["title"],
+        #         "authority_level": meta["authority_level"],
+        #         "status": meta["status"],
+        #         "applies_to_account": meta["account_id"],
+        #         "text": doc,
+        #         "relevance_score": round(1 - dist, 3),
+        #     })
         for doc, meta, dist in zip(res["documents"][0], res["metadatas"][0], res["distances"][0]):
+            score = round(1 - dist, 3)
+
+            if score < 0.20:
+                continue
+
             out.append({
                 "source": meta["title"],
                 "authority_level": meta["authority_level"],
                 "status": meta["status"],
                 "applies_to_account": meta["account_id"],
                 "text": doc,
-                "relevance_score": round(1 - dist, 3),
+                "relevance_score": score,
             })
-        confidence = assess_confidence(out)
+
+        # confidence = assess_confidence(out)
+        confidence = assess_confidence(out, ctx.account_id)
         return json.dumps({"results": out, "confidence_assessment": confidence}, indent=2)
 
     @tool
