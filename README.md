@@ -23,8 +23,8 @@
 
 ## 🔗 Demo & Submission
 
-- **Live Demo:** [Add hosted application URL]
-- **Demo Video:** [xyz]
+- **Live Demo:** [[Aclick here](https://parcelpilot-ops-intelligence.streamlit.app/)]
+- **Demo Video:** [[ParcelPilot](https://www.loom.com/share/ebb2cfa14c27489397f5d81319227694)]
 - **Architecture:** [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - **Product Note:** [`PRODUCT_NOTE.md`](PRODUCT_NOTE.md)
 - **Evaluation:** [`EVAL.md`](EVAL.md)
