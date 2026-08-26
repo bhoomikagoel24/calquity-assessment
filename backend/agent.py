@@ -338,7 +338,7 @@ def run_turn(
     trace = [
         {
             "type": type(m).__name__,
-            "content": str(m.content)[:500],
+            "content": str(m.content),
         }
         for m in result["messages"]
     ]
@@ -369,7 +369,7 @@ def run_turn(
         import trust_guard
 
         grounding = trust_guard.check_numeric_grounding(
-            last.content,
+            # last.content,
             evidence_packet["source_texts"],
         )
 
