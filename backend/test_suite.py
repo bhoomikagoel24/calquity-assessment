@@ -99,6 +99,22 @@ class TestRetrieval:
         conf = assess_confidence([])
         assert conf["confidence"] == "low"
 
+    def test_fallback_when_api_key_exhausted(self, monkeypatch):
+        from backend import agent
+
+        def fake_primary(*args, **kwargs):
+            raise Exception("429 quota exceeded")
+
+        def fake_fallback(*args, **kwargs):
+            return "Fallback response"
+
+        monkeypatch.setattr(agent, "PRIMARY_CALL", fake_primary)
+        monkeypatch.setattr(agent, "FALLBACK_CALL", fake_fallback)
+
+        result = agent.run_agent("test query")
+
+        assert result == "Fallback response"
+
 
 # ---------- Escalation drafting (state-changing action) ----------
 
